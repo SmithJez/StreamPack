@@ -22,6 +22,7 @@ import android.hardware.camera2.CaptureRequest
 import android.util.Size
 import android.view.Surface
 import androidx.annotation.RequiresPermission
+import io.github.thibaultbee.streampack.core.elements.processing.video.source.ISourceInfoProvider
 import io.github.thibaultbee.streampack.core.elements.sources.video.AbstractPreviewableSource
 import io.github.thibaultbee.streampack.core.elements.sources.video.VideoSourceConfig
 import io.github.thibaultbee.streampack.core.elements.sources.video.camera.controllers.CameraController
@@ -39,11 +40,12 @@ import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 
+
 /**
  * Creates a [CameraSource] from a [Context].
  */
 @RequiresPermission(Manifest.permission.CAMERA)
-internal suspend fun CameraSource(context: Context, cameraId: String) =
+suspend fun CameraSource(context: Context, cameraId: String) =
     CameraSource(context.getSystemService(Context.CAMERA_SERVICE) as CameraManager, cameraId)
 
 
@@ -51,7 +53,7 @@ internal suspend fun CameraSource(context: Context, cameraId: String) =
  * Creates a [CameraSource] from a [CameraManager].
  */
 @RequiresPermission(Manifest.permission.CAMERA)
-internal suspend fun CameraSource(
+suspend fun CameraSource(
     manager: CameraManager, cameraId: String
 ): CameraSource {
     require(manager.cameras.contains(cameraId)) {
@@ -66,7 +68,7 @@ internal suspend fun CameraSource(
  *
  * Based on Camera2 API.
  */
-internal class CameraSource(
+class CameraSource(
     private val manager: CameraManager, private val controller: CameraController
 ) : ICameraSourceInternal, ICameraSource, AbstractPreviewableSource() {
     override val settings by lazy { CameraSettings(manager, controller) }
@@ -75,13 +77,37 @@ internal class CameraSource(
     override val timestampOffsetInNs =
         CameraTimestampHelper.getTimeOffsetInNsToMonoClock(manager, cameraId)
 
+    // ➡️ Add these inside the class
+    private val _rotationDegrees = MutableStateFlow(0)
+    private val _isMirror = MutableStateFlow(false)
+
+    var rotationDegrees: Int
+        get() = _rotationDegrees.value
+        set(value) { _rotationDegrees.value = (value % 360 + 360) % 360 }
+
+    var isMirror: Boolean
+        get() = _isMirror.value
+        set(value) { _isMirror.value = value }
+
+    override val infoProviderFlow = MutableStateFlow<ISourceInfoProvider>(
+        object : ISourceInfoProvider {
+            override val rotationDegrees: Int
+                get() = _rotationDegrees.value
+            override val isMirror: Boolean
+                get() = _isMirror.value
+
+            override fun getSurfaceSize(targetResolution: Size): Size {
+                return targetResolution
+            }
+        }
+    )
+
+
     // Surfaces that are running or will be running
     private var outputSurface: Surface? = null
     private var previewSurface: Surface? = null
 
-    override val infoProviderFlow = MutableStateFlow(CameraInfoProvider(manager, cameraId))
-
-    // States
+//    override val infoProviderFlow = MutableStateFlow(CameraInfoProvider(manager, cameraId))
     private val _isStreamingFlow = MutableStateFlow(false)
     override val isStreamingFlow = _isStreamingFlow.asStateFlow()
 
