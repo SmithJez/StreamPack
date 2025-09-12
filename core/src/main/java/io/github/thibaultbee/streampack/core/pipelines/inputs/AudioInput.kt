@@ -100,7 +100,7 @@ interface IAudioInput {
 /**
  * A internal class that manages an audio source and an audio processor.
  */
-internal class AudioInput(
+public class AudioInput(
     private val context: Context,
     config: Config,
     private val coroutineDispatcher: CoroutineDispatcher = Dispatchers.Default
@@ -351,7 +351,7 @@ internal class AudioInput(
         private const val TAG = "AudioInput"
     }
 
-    internal sealed class Config
+    public sealed class Config
 
     internal class PushConfig(val onFrame: (RawFrame) -> Unit) : Config()
     internal class CallbackConfig : Config()

@@ -90,6 +90,7 @@ open class VideoCodecConfig(
      * On device with API < 25, this value will be rounded to an integer. So don't expect a precise value and any value < 0.5 will be considered as 0.
      */
     val gopDurationInS: Float = 1f  // 1s between I frames
+    , var bitrateMode: Int = MediaCodecInfo.EncoderCapabilities.BITRATE_MODE_CBR
 ) : CodecConfig(mimeType, startBitrate, profile) {
     init {
         require(mimeType.isVideo) { "MimeType must be video" }
@@ -163,6 +164,7 @@ open class VideoCodecConfig(
             resolution.height
         )
 
+
         // Extended video format
         format.setInteger(MediaFormat.KEY_BIT_RATE, startBitrate)
         format.setInteger(MediaFormat.KEY_FRAME_RATE, fps)
@@ -170,6 +172,9 @@ open class VideoCodecConfig(
             format.setFloat(MediaFormat.KEY_I_FRAME_INTERVAL, gopDurationInS)
         } else {
             format.setInteger(MediaFormat.KEY_I_FRAME_INTERVAL, gopDurationInS.roundToInt())
+        }
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            format.setInteger(MediaFormat.KEY_BITRATE_MODE, bitrateMode)
         }
 
         if (withProfileLevel) {
