@@ -90,7 +90,7 @@ open class VideoCodecConfig(
      * On device with API < 25, this value will be rounded to an integer. So don't expect a precise value and any value < 0.5 will be considered as 0.
      */
     val gopDurationInS: Float = 1f  // 1s between I frames
-    , var bitrateMode: Int = MediaCodecInfo.EncoderCapabilities.BITRATE_MODE_CBR
+    , var bitrateMode: Int = MediaCodecInfo.EncoderCapabilities.BITRATE_MODE_VBR
 ) : CodecConfig(mimeType, startBitrate, profile) {
     init {
         require(mimeType.isVideo) { "MimeType must be video" }
@@ -157,15 +157,22 @@ open class VideoCodecConfig(
      *
      * @return the corresponding video media format
      */
+
+    private fun isBitrateModeSupported(mime: String, mode: Int): Boolean {
+        val list = android.media.MediaCodecList(android.media.MediaCodecList.ALL_CODECS)
+        return list.codecInfos.any { info ->
+            info.isEncoder && info.supportedTypes.any { it.equals(mime, true) } &&
+                    runCatching {
+                        val caps = info.getCapabilitiesForType(mime)
+                        val enc = caps.encoderCapabilities
+                        // API 21+
+                        enc != null && enc.isBitrateModeSupported(mode)
+                    }.getOrDefault(false)
+        }
+    }
+
     override fun getFormat(withProfileLevel: Boolean): MediaFormat {
-        val format = MediaFormat.createVideoFormat(
-            mimeType,
-            resolution.width,
-            resolution.height
-        )
-
-
-        // Extended video format
+        val format = MediaFormat.createVideoFormat(mimeType, resolution.width, resolution.height)
         format.setInteger(MediaFormat.KEY_BIT_RATE, startBitrate)
         format.setInteger(MediaFormat.KEY_FRAME_RATE, fps)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N_MR1) {
@@ -173,8 +180,12 @@ open class VideoCodecConfig(
         } else {
             format.setInteger(MediaFormat.KEY_I_FRAME_INTERVAL, gopDurationInS.roundToInt())
         }
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-            format.setInteger(MediaFormat.KEY_BITRATE_MODE, bitrateMode)
+
+        // ✅ Only set bitrate-mode if supported; otherwise skip it
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
+            if (isBitrateModeSupported(mimeType, bitrateMode)) {
+                format.setInteger(MediaFormat.KEY_BITRATE_MODE, bitrateMode)
+            }
         }
 
         if (withProfileLevel) {
@@ -360,4 +371,6 @@ fun VideoCodecConfig.rotateDegreesFromNaturalOrientation(
         this
     }
 }
+
+
 
