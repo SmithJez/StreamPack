@@ -23,6 +23,7 @@ import android.os.Build
 import android.view.Surface
 import androidx.annotation.RequiresApi
 import androidx.annotation.RequiresPermission
+import io.github.thibaultbee.streampack.core.configuration.mediadescriptor.MediaDescriptor
 import io.github.thibaultbee.streampack.core.elements.endpoints.DynamicEndpoint
 import io.github.thibaultbee.streampack.core.elements.endpoints.DynamicEndpointFactory
 import io.github.thibaultbee.streampack.core.elements.endpoints.IEndpointInternal
@@ -41,6 +42,8 @@ import io.github.thibaultbee.streampack.core.pipelines.outputs.encoding.IConfigu
 import io.github.thibaultbee.streampack.core.pipelines.outputs.encoding.IEncodingPipelineOutputInternal
 import io.github.thibaultbee.streampack.core.streamers.infos.IConfigurationInfo
 import kotlinx.coroutines.flow.StateFlow
+import io.github.thibaultbee.streampack.core.regulator.controllers.IBitrateRegulatorController
+
 
 /**
  * Creates a [DualStreamer] with a default audio source.
@@ -226,11 +229,16 @@ open class DualStreamer(
     /**
      * Whether any of the output is opening.
      */
-    override val isOpenFlow: StateFlow<Boolean> = combineStates(
-        firstPipelineOutput.isOpenFlow, secondPipelineOutput.isOpenFlow
-    ) { isOpeningArray ->
-        isOpeningArray[0] || isOpeningArray[1]
-    }
+//    override val isOpenFlow: StateFlow<Boolean> = combineStates(
+//        firstPipelineOutput.isOpenFlow, secondPipelineOutput.isOpenFlow
+//    ) { isOpeningArray ->
+//        isOpeningArray[0] || isOpeningArray[1]
+//    }
+
+    override val isOpenFlow: StateFlow<Boolean> =
+        combineStates(firstPipelineOutput.isOpenFlow, secondPipelineOutput.isOpenFlow) {
+            it[0] && it[1]
+        }
 
     /**
      * Whether any of the output is streaming.
@@ -347,4 +355,47 @@ open class DualStreamer(
     override suspend fun stopStream() = pipeline.stopStream()
 
     override suspend fun release() = pipeline.release()
+
+    /**
+     * Adds a bitrate regulator controller.
+     *
+     * Limitation: applies to BOTH outputs.
+     */
+    fun addBitrateRegulatorController(
+        controllerFactory: IBitrateRegulatorController.Factory
+    ) {
+        firstPipelineOutput.addBitrateRegulatorController(controllerFactory)
+        secondPipelineOutput.addBitrateRegulatorController(controllerFactory)
+    }
+
+    /**
+     * Removes bitrate regulator controller from both outputs.
+     */
+    fun removeBitrateRegulatorController() {
+        firstPipelineOutput.removeBitrateRegulatorController()
+        secondPipelineOutput.removeBitrateRegulatorController()
+    }
+
+    /**
+     * First endpoint (e.g. live SRT)
+     */
+    val firstEndpoint
+        get() = firstPipelineOutput.endpoint
+
+    /**
+     * Second endpoint (e.g. record / mirror)
+     */
+    val secondEndpoint
+        get() = secondPipelineOutput.endpoint
+
+    suspend fun open(
+        firstDescriptor: MediaDescriptor,
+        secondDescriptor: MediaDescriptor
+    ) {
+        firstPipelineOutput.open(firstDescriptor)
+        secondPipelineOutput.open(secondDescriptor)
+    }
+
+
+
 }
